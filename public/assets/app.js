@@ -4,7 +4,8 @@ const state = {
   hasMore: false,
   loading: false,
   filter: "all",
-  query: ""
+  query: "",
+  mediaInfo: new Map()
 };
 
 const grid = document.getElementById("videoGrid");
@@ -15,12 +16,24 @@ const loadMoreBtn = document.getElementById("loadMoreBtn");
 const errorPanel = document.getElementById("errorPanel");
 const modal = document.getElementById("playerModal");
 const player = document.getElementById("videoPlayer");
+let posterObserver = null;
 
 function formatSize(bytes) {
   if (!Number.isFinite(bytes)) return "MP4";
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "—:—";
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
+    : `${minutes}:${String(secs).padStart(2, "0")}`;
 }
 
 function safeDate(value) {
@@ -41,11 +54,102 @@ function visibleVideos() {
   return list;
 }
 
+function applyMediaInfo(video, card) {
+  const info = state.mediaInfo.get(video.key);
+  if (!info) return;
+  const duration = card.querySelector(".duration-badge");
+  const image = card.querySelector(".poster-image");
+  if (duration) duration.textContent = formatDuration(info.duration);
+  if (image && info.thumbnail) {
+    image.src = info.thumbnail;
+    image.hidden = false;
+    card.querySelector(".poster").classList.add("has-thumbnail");
+  }
+}
+
+function createPosterObserver() {
+  if (posterObserver) posterObserver.disconnect();
+  posterObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      const card = entry.target;
+      posterObserver.unobserve(card);
+      const video = card._filmVideo;
+      if (video) loadVideoPreview(video, card);
+    });
+  }, { rootMargin: "260px 0px" });
+}
+
+function loadVideoPreview(videoData, card) {
+  const cached = state.mediaInfo.get(videoData.key);
+  if (cached) {
+    applyMediaInfo(videoData, card);
+    return;
+  }
+
+  const probe = document.createElement("video");
+  probe.crossOrigin = "anonymous";
+  probe.preload = "metadata";
+  probe.muted = true;
+  probe.playsInline = true;
+  let saved = false;
+
+  const saveInfo = (thumbnail = null) => {
+    if (saved) return;
+    saved = true;
+    const info = {
+      duration: Number.isFinite(probe.duration) ? probe.duration : NaN,
+      thumbnail
+    };
+    state.mediaInfo.set(videoData.key, info);
+    if (card.isConnected) applyMediaInfo(videoData, card);
+    probe.removeAttribute("src");
+    probe.load();
+  };
+
+  probe.addEventListener("loadedmetadata", () => {
+    const duration = probe.duration;
+    if (!Number.isFinite(duration) || duration <= 0) {
+      saveInfo();
+      return;
+    }
+    const seekTo = Math.min(Math.max(duration * 0.08, 0.15), 2.5, Math.max(duration - 0.05, 0));
+    probe.addEventListener("seeked", () => {
+      let thumbnail = null;
+      try {
+        const width = 480;
+        const ratio = probe.videoWidth && probe.videoHeight
+          ? probe.videoHeight / probe.videoWidth
+          : 9 / 16;
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = Math.max(1, Math.round(width * ratio));
+        const context = canvas.getContext("2d");
+        context.drawImage(probe, 0, 0, canvas.width, canvas.height);
+        thumbnail = canvas.toDataURL("image/jpeg", 0.76);
+      } catch {
+        // R2 CORS may not yet allow canvas access; duration can still be shown.
+      }
+      saveInfo(thumbnail);
+    }, { once: true });
+    try {
+      probe.currentTime = seekTo;
+    } catch {
+      saveInfo();
+    }
+  }, { once: true });
+
+  probe.addEventListener("error", () => saveInfo(), { once: true });
+  probe.src = videoData.url;
+  probe.load();
+}
+
 function render() {
   const list = visibleVideos();
   countEl.textContent = state.videos.length.toLocaleString("vi-VN");
   resultLabel.textContent = `${list.length.toLocaleString("vi-VN")} video hiển thị`;
   loadMoreBtn.hidden = !state.hasMore || Boolean(state.query);
+  createPosterObserver();
   grid.innerHTML = "";
 
   if (!list.length) {
@@ -54,7 +158,7 @@ function render() {
   }
 
   const fragment = document.createDocumentFragment();
-  list.forEach((video, index) => {
+  list.forEach((video) => {
     const card = document.createElement("article");
     card.className = "video-card";
     card.tabIndex = 0;
@@ -63,6 +167,11 @@ function render() {
 
     const poster = document.createElement("div");
     poster.className = "poster";
+    const image = document.createElement("img");
+    image.className = "poster-image";
+    image.alt = "";
+    image.loading = "lazy";
+    image.hidden = true;
     const tag = document.createElement("span");
     tag.className = "poster-tag";
     tag.textContent = "MP4 · R2";
@@ -72,7 +181,10 @@ function render() {
     const play = document.createElement("span");
     play.className = "poster-play";
     play.textContent = "▶";
-    poster.append(tag, symbol, play);
+    const duration = document.createElement("span");
+    duration.className = "duration-badge";
+    duration.textContent = "…";
+    poster.append(image, tag, symbol, play, duration);
 
     const info = document.createElement("div");
     info.className = "card-info";
@@ -89,6 +201,8 @@ function render() {
     meta.append(size, date);
     info.append(title, meta);
     card.append(poster, info);
+    card._filmVideo = video;
+
     const open = () => openPlayer(video);
     card.addEventListener("click", open);
     card.addEventListener("keydown", (event) => {
@@ -98,6 +212,8 @@ function render() {
       }
     });
     fragment.append(card);
+    applyMediaInfo(video, card);
+    posterObserver.observe(card);
   });
   grid.append(fragment);
 }
@@ -144,6 +260,7 @@ async function fetchPage(cursor = null, reset = false) {
 
 function openPlayer(video) {
   document.getElementById("playerTitle").textContent = video.title;
+  player.crossOrigin = "anonymous";
   player.src = video.url;
   document.getElementById("openOriginal").href = video.url;
   modal.hidden = false;
