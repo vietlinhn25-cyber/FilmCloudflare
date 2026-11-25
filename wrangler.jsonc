@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "filmcloudflare",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-26",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "r2_buckets": [
+    {
+      "binding": "MOVIES",
+      "bucket_name": "lol"
+    }
+  ],
+  "vars": {
+    "PUBLIC_R2_BASE_URL": "https://pub-bcb05d8d57194ba6a78a0578c483da08.r2.dev"
+  }
+}

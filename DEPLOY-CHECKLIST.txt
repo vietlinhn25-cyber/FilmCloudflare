@@ -1,0 +1,14 @@
+FILMCLOUDFLARE DEPLOYMENT CHECKLIST
+
+[ ] Unzip this project.
+[ ] Push all files to vietlinhn25-cyber/FilmCloudflare on branch main.
+[ ] Add CLOUDFLARE_API_TOKEN as a GitHub Actions secret.
+[ ] Add CLOUDFLARE_ACCOUNT_ID as a GitHub Actions secret.
+[ ] Confirm the Worker R2 binding MOVIES points to bucket lol.
+[ ] Confirm PUBLIC_R2_BASE_URL matches the current bucket public endpoint.
+[ ] Run GitHub Actions workflow: Deploy FilmCloudflare.
+[ ] Open /api/health on the deployed workers.dev URL.
+[ ] Open /api/videos and confirm MP4 keys are returned.
+[ ] Open the homepage and test a video on desktop/mobile.
+
+Never commit API tokens or secrets.

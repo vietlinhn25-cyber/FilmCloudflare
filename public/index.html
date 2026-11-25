@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090b12">
+  <meta name="description" content="FilmCloudflare - thư viện video trực tuyến được phân phối từ Cloudflare R2.">
+  <title>FilmCloudflare — Watch anywhere</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="FilmCloudflare home">
+      <span class="brand-mark">F</span><span>FILM<span class="brand-light">CLOUDFLARE</span></span>
+    </a>
+    <nav><a class="active" href="#home">Khám phá</a><a href="#library">Thư viện</a></nav>
+    <div class="top-actions"><span class="live-dot"></span><span class="status-label">R2 LIBRARY</span><button class="icon-button" id="refreshBtn" title="Làm mới danh sách" aria-label="Làm mới">↻</button></div>
+  </header>
+
+  <main id="home">
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow"><span></span> YOUR PERSONAL STREAMING LIBRARY</div>
+        <h1>Điện ảnh.<br><span>Không giới hạn.</span></h1>
+        <p>Khám phá thư viện video được đồng bộ trực tiếp từ Cloudflare R2. Chọn một video và bắt đầu xem.</p>
+        <a class="primary-button" href="#library">Khám phá thư viện <span>→</span></a>
+        <div class="hero-meta"><span>●</span> DIRECT R2 STREAMING <i></i> MP4 LIBRARY</div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="art-orbit orbit-a"></div><div class="art-orbit orbit-b"></div>
+        <div class="art-screen"><div class="screen-glow"></div><div class="screen-play">▶</div><div class="screen-caption">NOW STREAMING</div></div>
+        <div class="art-chip chip-top">CLOUDFLARE R2</div><div class="art-chip chip-bottom">YOUR LIBRARY · YOUR RULES</div>
+      </div>
+    </section>
+
+    <section class="stats-row">
+      <div><strong id="movieCount">—</strong><span>VIDEO ĐÃ TÌM THẤY</span></div>
+      <div><strong>R2</strong><span>OBJECT STORAGE</span></div>
+      <div><strong>MP4</strong><span>ĐỊNH DẠNG PHÁT</span></div>
+      <div><strong id="syncStatus">Đang kết nối</strong><span>TRẠNG THÁI ĐỒNG BỘ</span></div>
+    </section>
+
+    <section class="library-section" id="library">
+      <div class="section-heading">
+        <div><div class="eyebrow">THE COLLECTION</div><h2>Thư viện <span>video</span></h2><p class="section-subtitle">Danh sách được lấy tự động từ bucket R2 <b>lol</b>.</p></div>
+        <div class="search-wrap"><span>⌕</span><input id="searchInput" type="search" placeholder="Tìm tên video..." autocomplete="off"><kbd>⌘ K</kbd></div>
+      </div>
+      <div class="toolbar"><div class="filters" id="filters"><button class="filter active" data-filter="all">Tất cả</button><button class="filter" data-filter="recent">Mới cập nhật</button></div><span id="resultLabel">Đang tải thư viện…</span></div>
+      <div class="video-grid" id="videoGrid"><div class="loading-card"><div class="spinner"></div><span>Đang đồng bộ video từ R2…</span></div></div>
+      <div class="load-more-wrap"><button class="secondary-button" id="loadMoreBtn" hidden>Tải thêm video <span>↓</span></button></div>
+      <div class="error-panel" id="errorPanel" hidden></div>
+    </section>
+  </main>
+
+  <footer><a class="brand footer-brand" href="#"><span class="brand-mark">F</span><span>FILM<span class="brand-light">CLOUDFLARE</span></span></a><span>POWERED BY CLOUDFLARE WORKERS + R2</span><span>© <span id="year"></span> FILMCLOUDFLARE</span></footer>
+
+  <div class="player-modal" id="playerModal" hidden>
+    <div class="player-backdrop" data-close="true"></div>
+    <div class="player-shell">
+      <div class="player-header"><div><span class="eyebrow">NOW PLAYING</span><h3 id="playerTitle">Video</h3></div><button class="close-button" id="closePlayer" aria-label="Đóng">×</button></div>
+      <video id="videoPlayer" controls playsinline preload="metadata"></video>
+      <div class="player-footer"><span>STREAMING FROM CLOUDFLARE R2</span><a id="openOriginal" href="#" target="_blank" rel="noopener">Mở video gốc ↗</a></div>
+    </div>
+  </div>
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>
