@@ -4,6 +4,12 @@
   "main": "src/index.js",
   "compatibility_date": "2026-11-25",
   "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "hexsave.com",
+      "custom_domain": true
+    }
+  ],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
