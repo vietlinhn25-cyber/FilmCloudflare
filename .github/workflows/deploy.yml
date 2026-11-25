@@ -8,6 +8,11 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    
+    env:
+      CLOUDFLARE_API_TOKEN: cfut yijLIj9UUrERKIrxuySQUAJ3PII9829HRnph3j5Q8d98c682
+      CLOUDFLARE_ACCOUNT_ID: dc6e9a1346313b6872eeb13ffacebd10
+      
     permissions:
       contents: read
     steps:
