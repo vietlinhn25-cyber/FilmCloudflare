@@ -5,7 +5,8 @@ const state = {
   loading: false,
   filter: "all",
   query: "",
-  mediaInfo: new Map()
+  mediaInfo: new Map(),
+  thumbnailDb: null
 };
 
 const grid = document.getElementById("videoGrid");
@@ -55,7 +56,7 @@ function visibleVideos() {
 }
 
 function applyMediaInfo(video, card) {
-  const info = state.mediaInfo.get(video.key);
+  const info = state.mediaInfo.get(thumbnailCacheKey(video));
   if (!info) return;
   const duration = card.querySelector(".duration-badge");
   const image = card.querySelector(".poster-image");
@@ -80,68 +81,123 @@ function createPosterObserver() {
   }, { rootMargin: "260px 0px" });
 }
 
+function thumbnailCacheKey(video) {
+  return `${video.key}:${video.etag || ""}`;
+}
+
+function openThumbnailDB() {
+  if (state.thumbnailDb) return state.thumbnailDb;
+  state.thumbnailDb = new Promise((resolve) => {
+    if (!("indexedDB" in window)) return resolve(null);
+    const request = indexedDB.open("filmcloudflare-cache", 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("thumbnails")) {
+        db.createObjectStore("thumbnails", { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+  });
+  return state.thumbnailDb;
+}
+
+async function getCachedThumbnail(id) {
+  const db = await openThumbnailDB();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    const request = db.transaction("thumbnails", "readonly").objectStore("thumbnails").get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => resolve(null);
+  });
+}
+
+async function saveCachedThumbnail(id, info) {
+  const db = await openThumbnailDB();
+  if (!db || !info.thumbnail) return;
+  try {
+    db.transaction("thumbnails", "readwrite").objectStore("thumbnails")
+      .put({ id, duration: info.duration, thumbnail: info.thumbnail, savedAt: Date.now() });
+  } catch {
+    // The current page still displays the generated thumbnail if persistent storage is unavailable.
+  }
+}
+
 function loadVideoPreview(videoData, card) {
-  const cached = state.mediaInfo.get(videoData.key);
+  const cacheId = thumbnailCacheKey(videoData);
+  const cached = state.mediaInfo.get(cacheId);
   if (cached) {
     applyMediaInfo(videoData, card);
     return;
   }
 
+  let finished = false;
   const probe = document.createElement("video");
   probe.crossOrigin = "anonymous";
-  probe.preload = "metadata";
+  probe.preload = "auto";
   probe.muted = true;
   probe.playsInline = true;
-  let saved = false;
 
-  const saveInfo = (thumbnail = null) => {
-    if (saved) return;
-    saved = true;
-    const info = {
-      duration: Number.isFinite(probe.duration) ? probe.duration : NaN,
-      thumbnail
-    };
-    state.mediaInfo.set(videoData.key, info);
+  const finish = (duration = NaN, thumbnail = null) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timeout);
+    const info = { duration, thumbnail };
+    state.mediaInfo.set(cacheId, info);
     if (card.isConnected) applyMediaInfo(videoData, card);
+    if (thumbnail) saveCachedThumbnail(cacheId, info);
+    probe.pause();
     probe.removeAttribute("src");
     probe.load();
   };
 
-  probe.addEventListener("loadedmetadata", () => {
-    const duration = probe.duration;
-    if (!Number.isFinite(duration) || duration <= 0) {
-      saveInfo();
+  const timeout = setTimeout(() => finish(probe.duration), 20000);
+
+  getCachedThumbnail(cacheId).then((saved) => {
+    if (finished) return;
+    if (saved?.thumbnail) {
+      finish(saved.duration, saved.thumbnail);
       return;
     }
-    const seekTo = Math.min(Math.max(duration * 0.08, 0.15), 2.5, Math.max(duration - 0.05, 0));
-    probe.addEventListener("seeked", () => {
-      let thumbnail = null;
-      try {
-        const width = 480;
-        const ratio = probe.videoWidth && probe.videoHeight
-          ? probe.videoHeight / probe.videoWidth
-          : 9 / 16;
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = Math.max(1, Math.round(width * ratio));
-        const context = canvas.getContext("2d");
-        context.drawImage(probe, 0, 0, canvas.width, canvas.height);
-        thumbnail = canvas.toDataURL("image/jpeg", 0.76);
-      } catch {
-        // R2 CORS may not yet allow canvas access; duration can still be shown.
-      }
-      saveInfo(thumbnail);
-    }, { once: true });
-    try {
-      probe.currentTime = seekTo;
-    } catch {
-      saveInfo();
-    }
-  }, { once: true });
 
-  probe.addEventListener("error", () => saveInfo(), { once: true });
-  probe.src = videoData.url;
-  probe.load();
+    probe.addEventListener("loadedmetadata", () => {
+      const duration = probe.duration;
+      if (!Number.isFinite(duration) || duration <= 0) {
+        finish(duration);
+        return;
+      }
+      const seekTo = Math.min(Math.max(duration * 0.10, 0.5), 3, Math.max(duration - 0.1, 0));
+      probe.addEventListener("seeked", () => {
+        let thumbnail = null;
+        try {
+          if (!probe.videoWidth || !probe.videoHeight) throw new Error("No video frame available");
+          const width = 640;
+          const height = Math.max(1, Math.round(width * probe.videoHeight / probe.videoWidth));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d", { alpha: false });
+          context.drawImage(probe, 0, 0, width, height);
+          thumbnail = canvas.toDataURL("image/jpeg", 0.82);
+        } catch {
+          // Canvas extraction requires the R2 public host to allow this site through CORS.
+        }
+        finish(duration, thumbnail);
+      }, { once: true });
+      try {
+        probe.currentTime = seekTo;
+      } catch {
+        finish(duration);
+      }
+    }, { once: true });
+
+    probe.addEventListener("error", () => finish(probe.duration), { once: true });
+    probe.src = videoData.url;
+    probe.load();
+  }).catch(() => {
+    probe.src = videoData.url;
+    probe.load();
+  });
 }
 
 function render() {
